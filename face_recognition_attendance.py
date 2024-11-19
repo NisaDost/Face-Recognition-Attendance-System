@@ -2,7 +2,7 @@ import cv2
 import face_recognition
 import pickle
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # Load face encodings
 with open('encodings.pkl', 'rb') as f:
@@ -23,6 +23,9 @@ def mark_attendance(name):
 # Initialize webcam
 video_capture = cv2.VideoCapture(0)
 
+# Initialize the last attendance mark time
+last_mark_time = datetime.now()
+
 while True:
     # Capture frame-by-frame
     ret, frame = video_capture.read()
@@ -39,7 +42,10 @@ while True:
         best_match_index = face_distances.argmin() if matches.count(True) > 0 else None
         if best_match_index is not None and matches[best_match_index]:
             name = known_names[best_match_index]
-            mark_attendance(name)  # Mark attendance if recognized
+            # Mark attendance if recognized and 30 seconds have passed since the last mark
+            if (datetime.now() - last_mark_time) > timedelta(seconds=30):
+                mark_attendance(name)
+                last_mark_time = datetime.now()
 
         # Draw rectangle around the face
         top, right, bottom, left = face_location
@@ -50,8 +56,8 @@ while True:
     # Display the resulting frame
     cv2.imshow('Face Recognition Attendance System', frame)
 
-    # Press 'q' to quit
-    if cv2.waitKey(1) & 0xFF == ord('q'):
+    # Check for 'q' key press or window close event
+    if cv2.waitKey(1) & 0xFF == ord('q') or cv2.getWindowProperty('Face Recognition Attendance System', cv2.WND_PROP_VISIBLE) < 1:
         break
 
 # Release resources
