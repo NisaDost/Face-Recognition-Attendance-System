@@ -23,8 +23,8 @@ def mark_attendance(name):
 # Initialize webcam
 video_capture = cv2.VideoCapture(0)
 
-# Initialize the last attendance mark time
-last_mark_time = datetime.now()
+# Initialize the last attendance mark time for each person
+last_mark_time = {}
 
 while True:
     # Capture frame-by-frame
@@ -42,10 +42,12 @@ while True:
         best_match_index = face_distances.argmin() if matches.count(True) > 0 else None
         if best_match_index is not None and matches[best_match_index]:
             name = known_names[best_match_index]
-            # Mark attendance if recognized and 30 seconds have passed since the last mark
-            if (datetime.now() - last_mark_time) > timedelta(seconds=30):
+
+            # Get current time and check last marked time for this person
+            now = datetime.now()
+            if name not in last_mark_time or (now - last_mark_time[name]) > timedelta(seconds=30):
                 mark_attendance(name)
-                last_mark_time = datetime.now()
+                last_mark_time[name] = now
 
         # Draw rectangle around the face
         top, right, bottom, left = face_location
