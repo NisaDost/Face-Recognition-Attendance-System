@@ -1,5 +1,5 @@
 from flask import Flask, jsonify
-import subprocess
+import subprocess, os
 
 app = Flask(__name__)
 
@@ -22,10 +22,6 @@ def get_attendance_report():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
-
-# Öğrenci listesini döndüren API
 @app.route('/get_students', methods=['GET'])
 def get_students():
     faces_dir = "faces"
@@ -36,6 +32,7 @@ def get_students():
 
     for filename in os.listdir(faces_dir):
         if filename.endswith(('.png', '.jpg', '.jpeg')):
+            absolutePath = os.path.abspath(faces_dir)
             name_parts = filename.rsplit('.', 1)[0].split('_')
             if len(name_parts) == 2:
                 first_name = name_parts[0]
@@ -47,7 +44,7 @@ def get_students():
             students.append({
                 "first_name": first_name.capitalize(),
                 "last_name": last_name.capitalize(),
-                "photo_url": f"/static/faces/{filename}"
+                "photo_url": f"{absolutePath}/{filename}"
             })
 
     return jsonify(students)
@@ -61,4 +58,4 @@ def not_found(error):
     return jsonify({"error": "Endpoint not found"}), 404
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='0.0.0.0', port=5000, debug=True, threaded=True)
