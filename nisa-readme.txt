@@ -19,6 +19,8 @@ execution codes
 ---------------
 python3 -m venv face_recognition_env        //creates venv
 pip install --upgrade setuptools            //after create
+pip install flask
+
 pip install face_recognition_models
 python face_recognition_attendance.py
 activate/ deactivate                        //enables or disables venv
