@@ -15,18 +15,18 @@ emotion_model = cv2.dnn.readNetFromONNX("emotion-ferplus-8.onnx")
 # Emotion labels (FERPlus Model)
 emotion_labels = ["Neutral", "Happy", "Sad", "Surprise", "Angry", "Disgust", "Fear", "Contempt"]
 
-def mark_attendance(name):
+def mark_attendance(name, emotion):
     now = datetime.now()
     date = now.strftime('%Y-%m-%d')
     time = now.strftime('%H:%M:%S')
 
     conn = sqlite3.connect('attendance.db')
     cursor = conn.cursor()
-    cursor.execute("INSERT INTO attendance (name, date, time) VALUES (?, ?, ?)", (name, date, time))
+    cursor.execute("INSERT INTO attendance (name, date, time, emotion) VALUES (?, ?, ?, ?)", (name, date, time, emotion))
     conn.commit()
     conn.close()
 
-    print(f"Marked attendance for {name} at {time} on {date}")
+    print(f"Marked attendance for {name} at {time} on {date}. Emotion: {emotion}")
 
 # Initialize webcam
 video_capture = cv2.VideoCapture(0)
@@ -48,18 +48,6 @@ while True:
         matches = face_recognition.compare_faces(known_encodings, face_encoding)
         name = "Unknown"
 
-        # Get best match
-        face_distances = face_recognition.face_distance(known_encodings, face_encoding)
-        best_match_index = np.argmin(face_distances) if any(matches) else None
-        if best_match_index is not None and matches[best_match_index]:
-            name = known_names[best_match_index]
-
-            # Mark attendance every 30 seconds
-            now = datetime.now()
-            if name not in last_mark_time or (now - last_mark_time[name]) > timedelta(seconds=30):
-                mark_attendance(name)
-                last_mark_time[name] = now
-
         # Extract face ROI for emotion detection
         top, right, bottom, left = face_location
         face_roi = frame[top:bottom, left:right]
@@ -76,13 +64,24 @@ while True:
             # Get emotion with highest confidence
             emotion_index = np.argmax(emotion_preds)
             emotion = emotion_labels[emotion_index]
-
         else:
             emotion = "Neutral"
+        
+        # Get best match
+        face_distances = face_recognition.face_distance(known_encodings, face_encoding)
+        best_match_index = np.argmin(face_distances) if any(matches) else None
+        if best_match_index is not None and matches[best_match_index]:
+            name = known_names[best_match_index]
+
+            # Mark attendance every 30 seconds
+            now = datetime.now()
+            if name not in last_mark_time or (now - last_mark_time[name]) > timedelta(seconds=30):
+                mark_attendance(name, emotion)
+                last_mark_time[name] = now
 
         # Draw face rectangle & put text
         cv2.rectangle(frame, (left, top), (right, bottom), (0, 255, 0), 2)
-        cv2.putText(frame, f"{name} ({emotion} + {face_roi.size})", (left, top - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+        cv2.putText(frame, f"{name} ({emotion} + {emotion_index})", (left, top - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
 
     # Display the frame
     cv2.imshow('Face Recognition & Emotion Analysis', frame)

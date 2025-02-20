@@ -20,7 +20,8 @@ cursor.execute('''
 CREATE TABLE IF NOT EXISTS attendance (
     name TEXT NOT NULL,           
     date TEXT NOT NULL,
-    time TEXT NOT NULL
+    time TEXT NOT NULL,
+    emotion TEXT NOT NULL           
 )
 ''')
 
