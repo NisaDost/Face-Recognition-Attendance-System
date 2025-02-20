@@ -18,11 +18,9 @@ CREATE TABLE IF NOT EXISTS students (
 # Create a table for storing attendance records
 cursor.execute('''
 CREATE TABLE IF NOT EXISTS attendance (
-    id INTEGER PRIMARY KEY,
-    student_id INTEGER,
+    name TEXT NOT NULL,           
     date TEXT NOT NULL,
-    status TEXT NOT NULL,
-    FOREIGN KEY (student_id) REFERENCES students (id)
+    time TEXT NOT NULL
 )
 ''')
 
