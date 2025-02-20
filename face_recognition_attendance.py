@@ -52,18 +52,38 @@ while True:
         top, right, bottom, left = face_location
         face_roi = frame[top:bottom, left:right]
 
-        if face_roi.size > 0:
-            gray_face = cv2.cvtColor(face_roi, cv2.COLOR_BGR2GRAY)  # Convert to grayscale
-            resized_face = cv2.resize(gray_face, (64, 64))  # Resize to match model input
+        if face_roi is not None and face_roi.size > 0:
+            # Convert to grayscale
+            gray_face = cv2.cvtColor(face_roi, cv2.COLOR_BGR2GRAY)
 
-            # Prepare image for model (Normalize & Reshape)
-            blob = cv2.dnn.blobFromImage(resized_face, scalefactor=1/255.0, size=(64, 64))
+            # Resize to match model input
+            resized_face = cv2.resize(gray_face, (64, 64))
+
+            # Normalize and prepare for model
+            blob = cv2.dnn.blobFromImage(resized_face, scalefactor=1/255.0, size=(64, 64), mean=[0.5], swapRB=False, crop=False)
+
+            # Reshape if the model expects a (1, 64, 64, 1) input format
+            if blob.shape[1] == 1:  
+                blob = blob.reshape(1, 1, 64, 64)  # Ensuring correct shape for single-channel input
+
+            # Run model inference
             emotion_model.setInput(blob)
             emotion_preds = emotion_model.forward()
 
-            # Get emotion with highest confidence
-            emotion_index = np.argmax(emotion_preds)
+            # Apply softmax for probabilities (numerically stable version)
+            exp_preds = np.exp(emotion_preds - np.max(emotion_preds))  # Prevent overflow
+            emotion_probs = exp_preds / np.sum(exp_preds, axis=1, keepdims=True)
+
+            # Get highest probability emotion
+            emotion_index = np.argmax(emotion_probs)
             emotion = emotion_labels[emotion_index]
+
+            # Debugging info
+            # print("Blob Shape:", blob.shape)  # Ensure correct shape
+            # print("Emotion Predictions (Raw):", emotion_preds)
+            # print("Emotion Probabilities:", emotion_probs)
+            # print("Emotion Index:", emotion_index)
+            # print("Detected Emotion:", emotion)
         else:
             emotion = "Neutral"
         
@@ -77,11 +97,11 @@ while True:
             now = datetime.now()
             if name not in last_mark_time or (now - last_mark_time[name]) > timedelta(seconds=30):
                 mark_attendance(name, emotion)
-                last_mark_time[name] = now
 
+                last_mark_time[name] = now
         # Draw face rectangle & put text
         cv2.rectangle(frame, (left, top), (right, bottom), (0, 255, 0), 2)
-        cv2.putText(frame, f"{name} ({emotion} + {emotion_index})", (left, top - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+        cv2.putText(frame, f"{name} ({emotion})", (left, top - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
 
     # Display the frame
     cv2.imshow('Face Recognition & Emotion Analysis', frame)
