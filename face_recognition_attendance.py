@@ -2,34 +2,44 @@ import cv2
 import face_recognition
 import pickle
 import sqlite3
+import numpy as np
 from datetime import datetime, timedelta
 
 # Load face encodings
 with open('encodings.pkl', 'rb') as f:
     known_encodings, known_names = pickle.load(f)
 
+# Load emotion detection model (OpenCV's pre-trained DNN model)
+emotion_model = cv2.dnn.readNetFromONNX("emotion-ferplus-8.onnx")
+
+# Emotion labels (FERPlus Model)
+emotion_labels = ["Neutral", "Happy", "Sad", "Surprise", "Angry", "Disgust", "Fear", "Contempt"]
+
 def mark_attendance(name):
     now = datetime.now()
     date = now.strftime('%Y-%m-%d')
     time = now.strftime('%H:%M:%S')
-    
+
     conn = sqlite3.connect('attendance.db')
     cursor = conn.cursor()
     cursor.execute("INSERT INTO attendance (name, date, time) VALUES (?, ?, ?)", (name, date, time))
-        
     conn.commit()
     conn.close()
+
     print(f"Marked attendance for {name} at {time} on {date}")
 
 # Initialize webcam
 video_capture = cv2.VideoCapture(0)
 
-# Initialize the last attendance mark time for each person
+# Store last attendance mark time
 last_mark_time = {}
 
 while True:
-    # Capture frame-by-frame
     ret, frame = video_capture.read()
+    if not ret:
+        print("Failed to capture frame")
+        break
+
     rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     face_locations = face_recognition.face_locations(rgb_frame)
     face_encodings = face_recognition.face_encodings(rgb_frame, face_locations)
@@ -38,29 +48,51 @@ while True:
         matches = face_recognition.compare_faces(known_encodings, face_encoding)
         name = "Unknown"
 
-        # Check for matches
+        # Get best match
         face_distances = face_recognition.face_distance(known_encodings, face_encoding)
-        best_match_index = face_distances.argmin() if matches.count(True) > 0 else None
+        best_match_index = np.argmin(face_distances) if any(matches) else None
         if best_match_index is not None and matches[best_match_index]:
             name = known_names[best_match_index]
 
-            # Get current time and check last marked time for this person
+            # Mark attendance every 30 seconds
             now = datetime.now()
             if name not in last_mark_time or (now - last_mark_time[name]) > timedelta(seconds=30):
                 mark_attendance(name)
                 last_mark_time[name] = now
 
-        # Draw rectangle around the face
+        # Extract face ROI for emotion detection
         top, right, bottom, left = face_location
-        cv2.rectangle(frame, (left, top), (right, bottom), (0, 0, 255), 2)
-        # Display the name below the face
-        cv2.putText(frame, name, (left + 6, bottom + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+        face_roi = frame[top:bottom, left:right]
 
-    # Display the resulting frame
-    cv2.imshow('Face Recognition Attendance System', frame)
+        if face_roi.size > 0:
+            gray_face = cv2.cvtColor(face_roi, cv2.COLOR_BGR2GRAY)  # Convert to grayscale
+            resized_face = cv2.resize(gray_face, (64, 64))  # Resize to match model input
 
-    # Check for 'q' key press or window close event
-    if cv2.waitKey(1) & 0xFF == ord('q') or cv2.getWindowProperty('Face Recognition Attendance System', cv2.WND_PROP_VISIBLE) < 1:
+            # Prepare image for model (Normalize & Reshape)
+            blob = cv2.dnn.blobFromImage(resized_face, scalefactor=1/255.0, size=(64, 64))
+            emotion_model.setInput(blob)
+            emotion_preds = emotion_model.forward()
+
+            # Get emotion with highest confidence
+            emotion_index = np.argmax(emotion_preds)
+            emotion = emotion_labels[emotion_index]
+
+        else:
+            emotion = "Neutral"
+
+        # Draw face rectangle & put text
+        cv2.rectangle(frame, (left, top), (right, bottom), (0, 255, 0), 2)
+        cv2.putText(frame, f"{name} ({emotion} + {face_roi.size})", (left, top - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+
+    # Display the frame
+    cv2.imshow('Face Recognition & Emotion Analysis', frame)
+
+    # Check for exit condition
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
+
+    # Check if the window is still open before checking properties
+    if cv2.getWindowProperty('Face Recognition & Emotion Analysis', cv2.WND_PROP_VISIBLE) < 1:
         break
 
 # Release resources
