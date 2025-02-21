@@ -7,10 +7,17 @@ app = Flask(__name__)
 @app.route('/take_attendance', methods=['GET'])
 def take_attendance():
     try:
-        subprocess.run(["python", "face_recognition_attendance.py"])  # Python scriptini çalıştır
-        return jsonify({"message": "Attendance alındı!"})
+        # Start face recognition script and wait for it to close
+        process = subprocess.Popen(["python", "face_recognition_attendance.py"], shell=True)
+        process.wait()  # Wait for the user to close the face recognition app
+
+        # After closing, run export_attendance.py
+        export_process = subprocess.run(["python", "export_attendance.py"], capture_output=True, text=True)
+
+        return jsonify({"message": "Attendance taken and exported!", "export_output": export_process.stdout})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 
 # Attendance raporunu al
 @app.route('/get_attendance_report', methods=['GET'])
