@@ -1,5 +1,5 @@
 from flask import Flask, jsonify
-import subprocess, os
+import subprocess, os, sys
 
 app = Flask(__name__)
 
@@ -8,11 +8,12 @@ app = Flask(__name__)
 def take_attendance():
     try:
         # Start face recognition script and wait for it to close
-        process = subprocess.Popen(["python", "face_recognition_attendance.py"], shell=True)
+        python_executable = sys.executable
+        process = subprocess.Popen([python_executable, "face_recognition_attendance.py"], shell=True)
         process.wait()  # Wait for the user to close the face recognition app
 
         # After closing, run export_attendance.py
-        export_process = subprocess.run(["python", "export_attendance.py"], capture_output=True, text=True)
+        export_process = subprocess.run([python_executable, "export_attendance.py"], capture_output=True, text=True)
 
         return jsonify({"message": "Attendance taken and exported!", "export_output": export_process.stdout})
     except Exception as e:
@@ -55,6 +56,19 @@ def get_students():
             })
 
     return jsonify(students)
+
+@app.route('/encode_faces', methods=['GET'])
+def encode_faces():
+    try:
+        python_executable = sys.executable
+        process = subprocess.run([python_executable, "encode_faces.py"], capture_output=True, text=True)
+        
+        if process.returncode != 0:
+            return jsonify({"error": process.stderr}), 500
+        
+        return jsonify({"message": "Face encoding completed!", "output": process.stdout})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.errorhandler(500)
 def internal_error(error):
