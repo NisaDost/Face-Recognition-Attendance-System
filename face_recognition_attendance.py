@@ -50,43 +50,41 @@ while True:
 
         # Extract face ROI for emotion detection
         top, right, bottom, left = face_location
-        face_roi = frame[top:bottom, left:right]
+        face_roi = frame[max(0, top):min(bottom, frame.shape[0]), max(0, left):min(right, frame.shape[1])]
 
         if face_roi is not None and face_roi.size > 0:
-            # Convert to grayscale
+            # Ensure ROI bounds are valid
+            face_roi = frame[max(0, top):min(bottom, frame.shape[0]), max(0, left):min(right, frame.shape[1])]
+
+            # Convert to grayscale (FERPlus expects single-channel input)
             gray_face = cv2.cvtColor(face_roi, cv2.COLOR_BGR2GRAY)
 
-            # Resize to match model input
+            # Resize to match model input (64x64)
             resized_face = cv2.resize(gray_face, (64, 64))
 
-            # Normalize and prepare for model
-            blob = cv2.dnn.blobFromImage(resized_face, scalefactor=1/255.0, size=(64, 64), mean=[0.5], swapRB=False, crop=False)
+            # Convert to float32 (but keep range 0-255)
+            processed_face = resized_face.astype(np.float32)*3  # No division by 255
 
-            # Reshape if the model expects a (1, 64, 64, 1) input format
-            if blob.shape[1] == 1:  
-                blob = blob.reshape(1, 1, 64, 64)  # Ensuring correct shape for single-channel input
+            # Convert to blob for ONNX model
+            blob = cv2.dnn.blobFromImage(processed_face, scalefactor=1.0, size=(64, 64), mean=0, swapRB=False, crop=False)
 
-            # Run model inference
+            # Reshape if necessary (model may expect 1x1x64x64)
+            if blob.shape[1] == 1:
+                blob = blob.reshape(1, 1, 64, 64)
+
+            # Run emotion detection model
             emotion_model.setInput(blob)
             emotion_preds = emotion_model.forward()
 
-            # Apply softmax for probabilities (numerically stable version)
-            exp_preds = np.exp(emotion_preds - np.max(emotion_preds))  # Prevent overflow
-            emotion_probs = exp_preds / np.sum(exp_preds, axis=1, keepdims=True)
-
-            # Get highest probability emotion
-            emotion_index = np.argmax(emotion_probs)
+            # Get emotion label with highest probability
+            emotion_index = np.argmax(emotion_preds)
             emotion = emotion_labels[emotion_index]
 
-            # Debugging info
-            # print("Blob Shape:", blob.shape)  # Ensure correct shape
-            # print("Emotion Predictions (Raw):", emotion_preds)
-            # print("Emotion Probabilities:", emotion_probs)
-            # print("Emotion Index:", emotion_index)
-            # print("Detected Emotion:", emotion)
+            print(f"Detected Emotion: {emotion}")  # Debugging
         else:
             emotion = "Neutral"
-        
+
+
         # Get best match
         face_distances = face_recognition.face_distance(known_encodings, face_encoding)
         best_match_index = np.argmin(face_distances) if any(matches) else None
